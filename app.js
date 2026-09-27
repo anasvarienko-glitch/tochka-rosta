@@ -2,21 +2,28 @@
 const D=window.CLUB,KEY='tochka-rosta-demo-v1',types=['Инсайт','Спорная мысль','Вопрос','Что применю','Не согласен'];
 const main=document.querySelector('#main'),dialog=document.querySelector('#sheet'),body=document.querySelector('#sheet-body');
 let storageWarning=false;
-function freshState(){return {profile:{name:'Гость клуба',job:'',offer:'',seek:'',visible:false},registered:[],posts:[]};}
+function freshState(){return {profile:{name:'Гость клуба',job:'',offer:'',seek:'',about:'',contact:'',photo:'',joined:false,visible:false},registered:[],posts:[]};}
+function validContact(value){return /^@[A-Za-z0-9_]{5,32}$/.test(value.trim())||/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());}
+function isProfileComplete(p){return ['name','about','job','offer','contact'].every(k=>typeof p[k]==='string'&&p[k].trim())&&p.name.trim().split(/\s+/).length>=2&&validContact(p.contact)&&typeof p.photo==='string'&&/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p.photo)&&p.photo.length<500000;}
+function profileError(message,id){
+ const el=document.querySelector('#profile-error');el.textContent=message;el.hidden=false;
+ document.getElementById(id).focus();el.scrollIntoView({block:'center',behavior:'auto'});
+}
 function initials(name){return name.trim().split(/\s+/).slice(0,2).map(x=>x[0]||'').join('').toUpperCase();}
 function readState(){
  try{
   const v=JSON.parse(localStorage.getItem(KEY)),s=freshState();
   if(!v||typeof v!=='object')return s;
   if(v.profile&&typeof v.profile==='object'){
-   for(const k of ['name','job','offer','seek'])if(typeof v.profile[k]==='string')s.profile[k]=v.profile[k].slice(0,400);
-   s.profile.visible=v.profile.visible===true;
+   for(const k of ['name','job','offer','seek','about','contact'])if(typeof v.profile[k]==='string')s.profile[k]=v.profile[k].slice(0,400);
+   s.profile.visible=v.profile.visible===true; s.profile.joined=v.profile.joined===true; if(typeof v.profile.photo==='string'&&/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v.profile.photo)&&v.profile.photo.length<500000)s.profile.photo=v.profile.photo;
   }
   if(Array.isArray(v.registered))s.registered=[...new Set(v.registered.filter(id=>D.events.some(e=>e.id===id)))];
   if(Array.isArray(v.posts))s.posts=v.posts.filter(p=>p&&typeof p.id==='string'&&typeof p.text==='string'&&typeof p.name==='string'&&types.includes(p.type)).slice(0,100).map(p=>({...p,text:p.text.slice(0,800),name:p.name.slice(0,70),initials:initials(p.name),time:'Ваша реплика'}));
-  return s;
+  s.profile.joined=s.profile.joined&&isProfileComplete(s.profile); return s;
  }catch{storageWarning=true;return freshState();}
 }
+let draftPhoto='',photoLoading=false,photoRequest=0;
 let state=readState(),personFilter='Все',postFilter='Все',eventFilter='Все',query='';
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function money(v){return new Intl.NumberFormat('ru-RU').format(v)+' ₽';}
@@ -30,25 +37,36 @@ function cover(){return `<div class="book-cover" role="img" aria-label="Усло
 function faces(e){return `<div class="faces">${e.attendees.map(id=>{const p=D.people.find(p=>p.id===id);return `<span class="avatar" title="${esc(p.name)}">${p.initials}</span>`;}).join('')}<span>${count(e)} из ${e.capacity} мест занято</span></div>`;}
 function eventCard(e){const r=state.registered.includes(e.id);return `<article class="card event-card"><div><span class="tag${r?' lime':''}">${r?'Вы записаны':esc(e.type)}</span></div><div class="event-heading"><div class="date-box"><strong>${e.day}</strong><span>${e.month}</span></div><h3>${esc(e.title)}</h3></div><p class="small muted">${esc(e.duration)}<br>${esc(e.place)}</p>${faces(e)}<div class="event-meta"><strong>${fee(e,count(e))}</strong><span>${e.capacity-count(e)} мест свободно</span></div><button class="button ${r?'outline':'dark'} full" data-action="event" data-id="${e.id}">${r?'Моя запись':'Подробнее и запись'} ↗</button></article>`;}
 function personCard(p){return `<article class="card person-card"><div class="person-top"><span class="avatar">${esc(p.initials)}</span><div><h3>${esc(p.name)}</h3><p class="muted small">${esc(p.job)}</p></div></div><span class="label">Могу быть полезен / полезна</span><p>${esc(p.offer)}</p><button class="text-button" data-action="person" data-id="${esc(p.id)}">Познакомиться ↗</button></article>`;}
-function home(){return `<section class="hero"><span class="eyebrow">СООБЩЕСТВО ПРЕДПРИНИМАТЕЛЕЙ И ПРАКТИКОВ</span><h1>Место, где идеи<br>встречаются<br>с <em>людьми.</em></h1><p>Читаем, обсуждаем и находим своих.<br>Растём не только на встречах — между ними.</p><a class="button" href="#people">Найти своих людей ↗</a><div class="trajectory" aria-hidden="true"></div><div class="hero-number" aria-hidden="true">↗</div></section>
-<section class="section"><div class="section-head"><h2>В ритме клуба</h2><span class="small muted">${D.month}</span></div><div class="home-grid"><article class="card book-feature">${cover()}<div class="book-copy"><span class="eyebrow">КНИГА МЕСЯЦА</span><h3>${esc(D.book.title)}</h3><p class="muted">${esc(D.book.author)}</p><a class="text-button" href="#book">Войти в разговор ↗</a></div></article><div class="quiet-card"><span class="eyebrow">ОДНА МЫСЛЬ НА СЕГОДНЯ</span><h2>Что вы попробуете сделать иначе?</h2><p class="muted spacing">Вопрос, сомнение или маленький шаг — уже начало разговора.</p><a class="text-button" href="#book">Поделиться мыслью ↗</a></div></div></section>
-<section class="section"><div class="section-head"><h2>Увидимся скоро</h2><a href="#events">Все события ↗</a></div><div class="grid">${[...D.events].sort((a,b)=>a.date.localeCompare(b.date)).slice(0,2).map(eventCard).join('')}</div></section>
-<section class="section"><div class="section-head"><h2>За каждой идеей — человек</h2></div><div class="grid">${D.people.slice(0,2).map(personCard).join('')}</div><a class="text-button spacing" href="#people">Все участники ↗</a></section>
-<section class="section"><div class="quiet-card"><span class="eyebrow">ПРОЗРАЧНОЕ УЧАСТИЕ</span><h3>Клуб бесплатный. Расходы — общие.</h3><p class="muted">Делим фактическую стоимость площадки и организации. Расчёт виден до записи, клуб не добавляет наценку.</p></div></section>`;}
+function home(){return `<section class="hero club-hero"><div class="club-intro"><span class="eyebrow">КНИЖНЫЙ КЛУБ «ТОЧКА РОСТА»</span><h1>Читаем вместе.<br><em>Встречаемся<br>обсуждать.</em></h1><p>Выбираем книгу, читаем каждый в своём ритме и собираемся, чтобы поделиться впечатлениями. Слушаем друг друга, задаём вопросы и открываем в прочитанном что-то новое.</p><a class="button" href="#profile">Вступить в клуб <span aria-hidden="true">↗</span></a><span class="hero-note">Без членского взноса. О расходах на встречи — ниже.</span></div><figure class="club-photo"><img src="./club-hero.jpg" width="960" height="1280" alt="Ребёнок в прыжке над водой. Точка роста — растём вместе с книгами." fetchpriority="high"></figure></section>
+<section class="section club-about"><span class="eyebrow">ЧТО ТАКОЕ «ТОЧКА РОСТА»</span><h2>Одна книга.<br>Много разных взглядов.</h2><p class="lead">Это клуб для тех, кто хочет читать и говорить о прочитанном. Здесь не нужно быть литературным экспертом: ваши впечатления, вопросы и несогласие — часть разговора.</p><div class="reading-steps"><article><span class="step-number">01</span><h3>Выбираем книгу</h3><p>Знакомимся с книгой клуба и планируем чтение до встречи.</p></article><article><span class="step-number">02</span><h3>Читаем вместе</h3><p>Каждый в своём темпе. По ходу чтения можно делиться мыслями и вопросами.</p></article><article><span class="step-number">03</span><h3>Встречаемся обсудить</h3><p>Собираемся за общим разговором: что откликнулось, удивило или вызвало спор.</p></article></div><p class="extra-events">Иногда встречаемся и по другим поводам — ходим на экскурсии или знакомимся за кофе. Это дополнение к главному: совместному чтению и обсуждению книг.</p></section>
+<section class="section"><div class="club-money"><span class="eyebrow">КАК УСТРОЕНО УЧАСТИЕ</span><h2>Вступление — бесплатно.<br>Расходы — открыто.</h2><div class="money-rules"><article><h3>Без членского взноса</h3><p>За вступление в клуб и участие в книжном разговоре платить не нужно.</p></article><article><h3>На аренду зала — собираем вместе</h3><p>Если для встречи арендуем зал, взнос на аренду обязателен для участников этой встречи. Сумму и расчёт показываем в карточке события до записи.</p></article><article><h3>Пожертвования — добровольно</h3><p>Дополнительно поддержать клуб можно по желанию. Пожертвование не является условием вступления и не заменяет обязательный взнос на аренду.</p></article></div><p class="small muted">Клуб не добавляет наценку к аренде. Порядок сбора и итоговую сумму сообщаем до подтверждения участия.</p></div></section>
+<section class="section join-invitation"><span class="eyebrow">ДАВАЙТЕ ЗНАКОМИТЬСЯ</span><h2>Начнём с книги.<br>И пары слов о вас.</h2><p>Чтобы вступить в клуб, заполните анкету полностью. Нам важно знакомиться с людьми, с которыми мы читаем и встречаемся.</p><a class="button dark" href="#profile">Вступить в клуб ↗</a><p class="form-hint">В прототипе анкета сохраняется только в вашем браузере. Настоящая регистрация пока не подключена.</p></section>`;}
 function chipList(items,selected,kind){return `<div class="chips" aria-label="Фильтры">${items.map(x=>`<button class="chip ${x===selected?'active':''}" aria-pressed="${x===selected}" data-action="${kind}" data-value="${esc(x)}">${esc(x)}</button>`).join('')}</div>`;}
-function people(){return `<section class="section"><div class="page-heading"><span class="eyebrow">ГЛАВНЫЙ АКТИВ КЛУБА</span><h1>Люди, с которыми<br>есть о чём.</h1><p class="muted">Ищите не только по профессии — по тому, чем можете помочь друг другу.</p></div><label for="people-search">Имя, сфера, «могу помочь» или «ищу»</label><input class="search" id="people-search" type="search" placeholder="Например, команда или продукт" value="${esc(query)}">${chipList(['Все','Предпринимательство','Продукт','Маркетинг','Команда'],personFilter,'people-filter')}<div id="people-results"></div></section>`;}
+function people(){return `<section class="section"><div class="page-heading"><span class="eyebrow">УЧАСТНИКИ КНИЖНОГО КЛУБА</span><h1>Люди, с которыми<br>есть о чём.</h1><p class="muted">Знакомьтесь с теми, с кем читаете. Узнавайте об интересах друг друга и делитесь опытом.</p></div><label for="people-search">Имя, сфера, «могу помочь» или «ищу»</label><input class="search" id="people-search" type="search" placeholder="Например, команда или продукт" value="${esc(query)}">${chipList(['Все','Своё дело','Продукт','Маркетинг','Команда'],personFilter,'people-filter')}<div id="people-results"></div></section>`;}
 function renderPeople(){
  const list=D.people.filter(p=>(personFilter==='Все'||p.field===personFilter)&&[p.name,p.job,p.field,p.offer,p.seek].join(' ').toLowerCase().includes(query.toLowerCase().trim()));
  document.querySelector('#people-results').innerHTML=`<p class="count" role="status">Найдено: ${list.length} · демонстрационные карточки</p><div class="grid people-grid">${list.length?list.map(personCard).join(''):`<div class="empty"><h3>Пока никого не нашли</h3><p>Попробуйте другое слово или уберите фильтр.</p><button class="button outline" data-action="clear-search">Сбросить поиск</button></div>`}</div>`;
 }
-function events(){const list=[...D.events].sort((a,b)=>a.date.localeCompare(b.date)).filter(e=>eventFilter==='Все'||state.registered.includes(e.id));return `<section class="section"><div class="page-heading"><span class="eyebrow">ОКТЯБРЬ — ДЕКАБРЬ 2026 · ПРИМЕР РАСПИСАНИЯ</span><h1>Встречи, которые<br>продолжаются.</h1><p class="muted">Книга — повод. Разговор и новые знакомства — то, что остаётся с вами.</p></div>${chipList(['Все','Мои записи'],eventFilter,'event-filter')}<div class="grid">${list.length?list.map(eventCard).join(''):`<div class="empty"><h3>Вы ещё не выбрали встречу</h3><p>Найдите свой формат в расписании.</p><button class="button" data-action="event-filter" data-value="Все">Посмотреть события</button></div>`}</div><p class="form-hint spacing">Даты, места и суммы — примеры. Запись сохраняется только в вашем браузере.</p></section>`;}
+function events(){const list=[...D.events].sort((a,b)=>a.date.localeCompare(b.date)).filter(e=>eventFilter==='Все'||state.registered.includes(e.id));return `<section class="section"><div class="page-heading"><span class="eyebrow">ОКТЯБРЬ — ДЕКАБРЬ 2026 · ПРИМЕР РАСПИСАНИЯ</span><h1>Встречи, которые<br>продолжаются.</h1><p class="muted">Главные встречи клуба — обсуждения прочитанного. Экскурсии и другие события дополняют книжную программу.</p></div>${chipList(['Все','Мои записи'],eventFilter,'event-filter')}<div class="grid">${list.length?list.map(eventCard).join(''):`<div class="empty"><h3>Вы ещё не выбрали встречу</h3><p>Найдите свой формат в расписании.</p><button class="button" data-action="event-filter" data-value="Все">Посмотреть события</button></div>`}</div><p class="form-hint spacing">Даты, места и суммы — примеры. Запись сохраняется только в вашем браузере.</p></section>`;}
 function postCard(p){return `<article class="post"><div class="person-top"><span class="avatar">${esc(p.initials)}</span><div><h3>${esc(p.name)}</h3><span class="small muted">${esc(p.time)}</span></div></div><p>${esc(p.text)}</p><div class="post-meta"><span class="tag">${esc(p.type)}</span>${state.posts.some(x=>x.id===p.id)?`<button class="text-button" data-action="delete-post" data-id="${esc(p.id)}">Удалить</button>`:''}</div></article>`;}
 function renderPosts(){const posts=[...state.posts,...D.posts].filter(p=>postFilter==='Все'||p.type===postFilter);document.querySelector('#posts').innerHTML=posts.length?posts.map(postCard).join(''):'<div class="empty">Реплик этого типа пока нет. Ваша может стать первой.</div>';}
 function book(){return `<section class="section"><div class="book-intro">${cover()}<div><span class="eyebrow">${D.month} · КНИГА МЕСЯЦА</span><h1>${esc(D.book.title)}</h1><p class="muted spacing">${esc(D.book.author)}</p><span class="tag lime spacing">Сейчас читаем</span></div></div><h3>Почему читаем</h3><p class="muted spacing">${esc(D.book.note)}</p><p class="form-hint">Выбор книги и вводный текст — пример, не утверждённая программа клуба.</p><div class="quiet-card"><h3>С чего начать разговор</h3><ul class="questions">${D.book.questions.map(q=>`<li>${esc(q)}</li>`).join('')}</ul></div></section><section class="section"><div class="section-head"><h2>Разговор о книге</h2></div><p class="muted">Одна мысль — уже вклад. Можно не соглашаться, спрашивать и делиться тем, что попробуете.</p><form id="post-form" class="card spacing"><div class="form-row"><label for="post-type">Какой мыслью вы делитесь?</label><select id="post-type" name="type">${types.map(t=>`<option>${t}</option>`).join('')}</select></div><div class="form-row"><label for="post-text">Ваша реплика</label><textarea id="post-text" name="text" maxlength="800" required placeholder="После этой главы я задумался / задумалась…"></textarea></div><p class="form-hint">До 800 символов. Реплику увидите только вы в этом браузере.</p><button class="button dark full" type="submit">Добавить мысль ↗</button></form><div class="spacing">${chipList(['Все',...types],postFilter,'post-filter')}</div><div id="posts" aria-live="polite"></div></section><section class="section"><h2>Уже прочитали</h2>${D.book.archive.map(b=>`<div class="archive-item"><div><h3>${esc(b.title)}</h3><span class="small muted">${esc(b.author)}</span></div><span class="small muted">${b.month}</span></div>`).join('')}<p class="form-hint">Демонстрационный архив.</p></section>`;}
 function gallery(){return `<section class="section"><div class="page-heading"><span class="eyebrow">ПАМЯТЬ КЛУБА</span><h1>После встречи<br>остаётся больше.</h1><p class="muted">Здесь появятся фотографии и заметки участников. Пока показываем структуру альбомов без чужих фотографий.</p></div><div class="grid">${D.albums.map(a=>`<article class="card album"><div class="album-art" aria-hidden="true">○ → ●</div><div class="album-copy"><span class="eyebrow">${a.date}</span><h3>${a.title}</h3><p class="muted">${a.caption}</p><span class="tag spacing">Макет альбома · фото пока нет</span></div></article>`).join('')}</div><a class="text-button spacing" href="#home">На главную ↗</a></section>`;}
-function profile(){const p=state.profile;return `<section class="section"><div class="page-heading"><span class="eyebrow">ВАШЕ МЕСТО В СООБЩЕСТВЕ</span><h1>Начнём<br>со знакомства.</h1><p class="muted">Это локальный демопрофиль. Настоящий вход через Telegram появится после подключения сервера.</p></div><form id="profile-form" class="card"><div class="form-grid"><div class="form-row"><label for="profile-name">Как к вам обращаться</label><input id="profile-name" name="name" maxlength="70" required value="${esc(p.name)}" autocomplete="given-name"></div><div class="form-row"><label for="profile-job">Чем занимаетесь</label><input id="profile-job" name="job" maxlength="100" value="${esc(p.job)}" placeholder="Например, развиваю студию"></div></div><div class="form-row"><label for="profile-offer">Могу быть полезен / полезна</label><textarea id="profile-offer" name="offer" maxlength="400">${esc(p.offer)}</textarea></div><div class="form-row"><label for="profile-seek">Что ищу в сообществе</label><textarea id="profile-seek" name="seek" maxlength="400">${esc(p.seek)}</textarea></div><label class="checkline"><input type="checkbox" name="visible" ${p.visible?'checked':''}>Показывать карточку участникам после запуска. Сейчас настройка сохраняется только как пример.</label><p class="form-hint">Данные не отправляются на сервер. Не вводите конфиденциальную информацию на общем устройстве.</p><button class="button dark full" type="submit">Сохранить профиль</button></form><div class="quiet-card spacing"><h3>Мои встречи</h3><p class="muted">Вы записаны на ${state.registered.length} из демонстрационных событий.</p><button class="text-button" data-action="my-events">Посмотреть мои записи ↗</button></div><button class="text-button spacing" data-action="reset">Сбросить мои демонстрационные данные</button></section>`;}
+function profile(){
+ const p=state.profile;draftPhoto=p.photo||'';photoLoading=false;photoRequest++;
+ return `<section class="section registration"><div class="page-heading"><span class="eyebrow">КНИЖНЫЙ КЛУБ «ТОЧКА РОСТА»</span><h1>${p.joined?'Ваша анкета':'Вступить в клуб'}</h1><p class="muted">Давайте знакомиться. Для вступления заполните все поля и добавьте фото: так каждый участник приходит в клуб с понятной, живой анкетой.</p></div>${p.joined?'<div class="saved-banner">Анкета сохранена на этом устройстве. В прототипе она не отправляется организатору.</div>':''}<form id="profile-form" class="card"><p class="form-hint">Все поля анкеты и фотография обязательны. Отчество укажите при наличии.</p><p id="profile-error" class="form-error" role="alert" hidden></p><div class="photo-field"><div id="photo-preview" class="photo-preview">${draftPhoto?`<img src="${esc(draftPhoto)}" alt="Ваше фото">`:'<span aria-hidden="true">+</span>'}</div><div><label for="profile-photo">Ваше фото</label><input id="profile-photo" type="file" ${draftPhoto?'': 'required'} accept="image/jpeg,image/png,image/webp" aria-describedby="photo-hint"><p id="photo-hint" class="form-hint">JPG, PNG или WebP, до 5 МБ. Добавьте фото, на котором вас можно узнать.</p><button type="button" class="text-button" data-action="remove-photo">Убрать фото</button></div></div>
+<div class="form-row"><label for="profile-name">Фамилия, имя, отчество</label><input id="profile-name" name="name" maxlength="100" required value="${esc(p.name==='Гость клуба'?'':p.name)}" autocomplete="name" placeholder="Как вас представить участникам"><p class="form-hint">Обязательное поле. Отчество — при наличии.</p></div>
+<div class="form-row"><label for="profile-about">Немного о себе</label><textarea id="profile-about" name="about" required maxlength="400" placeholder="Что любите читать? Чем интересуетесь?">${esc(p.about)}</textarea></div>
+<div class="form-row"><label for="profile-job">Должность или чем занимаетесь</label><input id="profile-job" name="job" required maxlength="100" value="${esc(p.job)}" placeholder="Работа, учёба, своё дело или увлечение"></div>
+<div class="form-row"><label for="profile-offer">По каким вопросам к вам можно обратиться</label><textarea id="profile-offer" name="offer" required maxlength="400" placeholder="Чем можете быть полезны другим участникам?">${esc(p.offer)}</textarea></div>
+<div class="form-row"><label for="profile-contact">Как с вами связаться</label><input id="profile-contact" name="contact" required maxlength="120" value="${esc(p.contact)}" placeholder="Telegram @имя или электронная почта"><p class="form-hint">Укажите Telegram в формате @username или электронную почту.</p></div>
+<label class="checkline"><input type="checkbox" name="visible" ${p.visible?'checked':''}>Хочу показывать анкету и контакт участникам клуба после запуска.</label>
+<p class="form-hint">Сейчас все данные, включая фото, сохраняются только в этом браузере. Анкета не публикуется. В рабочей версии видимость будет защищена проверкой доступа.</p>
+<div class="registration-rules"><strong>Условия участия</strong><p>Вступление бесплатно. Для встречи с арендой зала нужен обязательный взнос; сумма указана до записи. Дополнительные пожертвования добровольны.</p></div>
+<button class="button dark full" id="save-profile" type="submit">${p.joined?'Сохранить изменения':'Вступить в клуб'}</button><p class="form-hint spacing">Это прототип регистрации. Вход и отправка анкеты организатору пока не подключены.</p></form><div class="quiet-card spacing"><h3>Мои встречи</h3><p class="muted">Ваших демонстрационных записей: ${state.registered.length}.</p><button class="text-button" data-action="my-events">Посмотреть мои записи ↗</button></div><button class="text-button spacing" data-action="reset">Сбросить мои демонстрационные данные</button></section>`;
+}
 function render(){
- const page=currentPage();main.innerHTML=({home,people,events,book,gallery,profile}[page])();
+ photoRequest++;photoLoading=false;const page=currentPage();main.innerHTML=({home,people,events,book,gallery,profile}[page])();
  document.querySelectorAll('[data-page]').forEach(a=>{const active=a.dataset.page===page;a.classList.toggle('active',active);if(active)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
  document.querySelector('.profile-button').textContent=state.profile.name==='Гость клуба'?'ВЫ':initials(state.profile.name);
  if(page==='people')renderPeople();if(page==='book')renderPosts();
@@ -62,6 +80,7 @@ function eventSheet(id){
 }
 document.addEventListener('click',event=>{
  const b=event.target.closest('[data-action]');if(!b)return;const {action,id,value}=b.dataset;
+ if(action==='remove-photo'){photoRequest++;photoLoading=false;draftPhoto='';document.querySelector('#photo-preview').innerHTML='<span aria-hidden='+String.fromCharCode(34)+'true'+String.fromCharCode(34)+'>+</span>';document.querySelector('#profile-photo').value='';document.querySelector('#profile-photo').required=true;document.querySelector('#save-profile').disabled=false;}
  if(action==='close')dialog.close();
  if(action==='profile')location.hash='profile';
  if(action==='event')eventSheet(id);
@@ -92,10 +111,19 @@ document.addEventListener('input',event=>{
 });
 document.addEventListener('submit',event=>{
  if(event.target.id==='profile-form'){
-  event.preventDefault();const data=new FormData(event.target),name=String(data.get('name')).trim();
-  if(!name){toast('Укажите имя');document.querySelector('#profile-name').focus();return;}
-  state.profile={name,job:String(data.get('job')).trim(),offer:String(data.get('offer')).trim(),seek:String(data.get('seek')).trim(),visible:data.has('visible')};
-  const ok=save();render();if(ok)toast('Профиль сохранён в этом браузере');
+  event.preventDefault();
+  if(photoLoading){profileError('Дождитесь загрузки фотографии.','profile-photo');return;}
+  const data=new FormData(event.target);
+  const candidate={...state.profile,photo:draftPhoto,joined:true,visible:data.has('visible')};
+  for(const key of ['name','about','job','offer','contact'])candidate[key]=String(data.get(key)||'').trim();
+  const fields=[['name','Укажите фамилию и имя.'],['about','Расскажите немного о себе.'],['job','Укажите должность или чем вы занимаетесь.'],['offer','Расскажите, по каким вопросам к вам можно обратиться.'],['contact','Укажите контакт для связи.']];
+  for(const [key,message] of fields){if(!candidate[key]){profileError(message,'profile-'+key);return;}}
+  if(candidate.name.split(/\s+/).length<2){profileError('Укажите фамилию и имя; отчество — при наличии.','profile-name');return;}
+  if(!validContact(candidate.contact)){profileError('Укажите Telegram @username (от 5 символов после @) или электронную почту.','profile-contact');return;}
+  if(!isProfileComplete(candidate)){profileError('Добавьте фотографию, чтобы завершить анкету.','profile-photo');return;}
+  const previous=state.profile;state.profile=candidate;
+  if(save()){render();toast('Полная анкета сохранена. Это демоверсия вступления в клуб.');}
+  else{state.profile=previous;profileError('Не удалось сохранить анкету в браузере. Освободите место или разрешите локальное хранение.','profile-name');}
  }
  if(event.target.id==='post-form'){
   event.preventDefault();const data=new FormData(event.target),text=String(data.get('text')).trim();
@@ -109,3 +137,30 @@ window.addEventListener('hashchange',()=>{if(dialog.open)dialog.close();render()
 render();
 if(storageWarning)toast('Хранилище недоступно или повреждено. Открыта чистая демоверсия.');
 if('serviceWorker' in navigator&&['http:','https:'].includes(location.protocol))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+/* Фото остаётся на устройстве; уменьшаем перед сохранением в localStorage. */
+document.addEventListener('change',async event=>{
+ if(event.target.id!=='profile-photo')return;
+ const file=event.target.files[0];if(!file)return;
+ if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024){
+  toast('Выберите JPG, PNG или WebP размером до 5 МБ');event.target.value='';return;
+ }
+ const request=++photoRequest;photoLoading=true;
+ const submit=document.querySelector('#save-profile');submit.disabled=true;
+ let url;
+ try{
+  url=URL.createObjectURL(file);
+  const img=new Image();
+  await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject;img.src=url;});
+  const scale=Math.min(1,512/Math.max(img.naturalWidth,img.naturalHeight));
+  const canvas=document.createElement('canvas');
+  canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
+  const context=canvas.getContext('2d');context.fillStyle='#f6f7f2';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(img,0,0,canvas.width,canvas.height);
+  const photo=canvas.toDataURL('image/jpeg',.8);
+  if(request!==photoRequest||currentPage()!=='profile')return;
+  draftPhoto=photo;document.querySelector('#profile-photo').required=false;
+  const preview=document.querySelector('#photo-preview');preview.replaceChildren();
+  const image=document.createElement('img');image.src=photo;image.alt='Ваше фото';preview.append(image);
+  toast('Фото добавлено. Сохраните анкету.');
+ }catch{if(request===photoRequest)toast('Не удалось открыть изображение. Попробуйте другое фото.');}
+ finally{if(url)URL.revokeObjectURL(url);if(request===photoRequest){photoLoading=false;submit.disabled=false;}}
+});

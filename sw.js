@@ -1,8 +1,8 @@
 /* Увеличивайте VERSION при обновлении файлов. */
-const VERSION='v1';
+const VERSION='v3';
 const PREFIX='tochka-rosta-'+self.registration.scope;
 const CACHE=PREFIX+VERSION;
-const FILES=['./','./index.html','./app.css','./app.js','./data.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png'];
+const FILES=['./','./index.html','./app.css','./app.js','./data.js','./manifest.webmanifest','./icon.svg','./logo.svg','./club-hero.jpg','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith(PREFIX)&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{
