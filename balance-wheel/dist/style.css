@@ -16,3 +16,5 @@
 
 /* Диагностика показывает только опоры и зоны внимания, без реплик-установок. */
 .result-layout{grid-template-columns:1fr}
+
+.messenger-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px}.contact-options{scroll-margin-top:32px;margin-top:24px}.contact-options h4{font-size:21px;color:var(--wine);margin:0 0 8px}.contact-options>p{font-size:14px;margin-bottom:14px}.contact-options .button,.contact-options .outline{margin:0}.consultation .messenger-actions{margin-top:20px}.consultation .messenger-actions .button{margin-top:0}.consultation .max-contact{background:transparent;color:#fff8ef;border-color:#ecd9d7}.consultation .max-contact:hover{background:#ffffff15}@media(max-width:650px){.messenger-actions{align-items:stretch}.messenger-actions>a{width:100%;font-size:13px}.contact-options h4{font-size:20px}}
