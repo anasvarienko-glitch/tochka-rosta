@@ -10,3 +10,6 @@
 .consultation .gift-label{color:#efd5c9;font-size:10px;letter-spacing:1.8px}.consultation>div{max-width:900px}.consultation #gift-description{max-width:790px}.question-card{max-width:650px;width:100%}.question-main{width:100%}
 
 .hero-gift-note{color:var(--wine);font-size:13px;max-width:490px;margin:8px 0 0}#results>.consultation{margin-top:24px;padding:30px;border-radius:18px}#results>.consultation h2{font-size:32px}#results>.consultation #gift-description{font-size:16px;max-width:850px}@media(max-width:650px){.hero-gift-note{font-size:12px}#results>.consultation{padding:24px 20px}#results>.consultation h2{font-size:27px}#results>.consultation #gift-description{font-size:14px}}
+
+/* После мини-исследования — только опоры и зоны внимания; выбор пути на сессии. */
+.result-cards{grid-template-columns:repeat(2,minmax(0,1fr))}@media(max-width:650px){.result-cards{grid-template-columns:1fr}}
